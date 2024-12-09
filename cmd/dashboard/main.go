@@ -1,13 +1,14 @@
 package main
 
 import (
-	"os"
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
-	_ "time/tzdata"
 
+	"github.com/joho/godotenv"
 	"github.com/naiba/nezha/cmd/dashboard/controller"
 	"github.com/naiba/nezha/cmd/dashboard/rpc"
 	"github.com/naiba/nezha/model"
@@ -18,9 +19,10 @@ import (
 )
 
 type DashboardCliParam struct {
-	Version          bool   // 当前版本号
-	ConfigFile       string // 配置文件路径
-	DatebaseLocation string // Sqlite3 数据库文件路径
+	Version        bool   // 当前版本号
+	ConfigFile     string // 配置文件路径
+	DatabaseDriver string // 数据库驱动
+	DatabaseDsn    string // 数据库DSN
 }
 
 var (
@@ -31,8 +33,37 @@ func init() {
 	flag.CommandLine.ParseErrorsWhitelist.UnknownFlags = true
 	flag.BoolVarP(&dashboardCliParam.Version, "version", "v", false, "查看当前版本号")
 	flag.StringVarP(&dashboardCliParam.ConfigFile, "config", "c", "data/config.yaml", "配置文件路径")
-	flag.StringVar(&dashboardCliParam.DatebaseLocation, "db", "data/sqlite.db", "Sqlite3数据库文件路径")
+	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite3", "数据库驱动")
+	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "data/sqlite.db", "数据库DSN")
 	flag.Parse()
+
+	// 加载.env文件
+	err := godotenv.Load()
+	if err != nil {
+		fmt.Println("No .env file found")
+	}
+	driver := getEnvStr("DATABASE_DRIVER", dashboardCliParam.DatabaseDriver)
+	dsn := getEnvStr("DATABASE_DSN", dashboardCliParam.DatabaseDsn)
+
+	dashboardCliParam.DatabaseDriver = driver
+	dashboardCliParam.DatabaseDsn = dsn
+
+}
+
+// getEnvStr 返回第一个存在的环境变量的值，如果都不存在，则返回 defaultValue。
+func getEnvStr(key, defaultValue string) string {
+	// 用 "|" 分割 key 字符串，处理多个环境变量名。
+	keys := strings.Split(key, "|")
+	// 遍历所有的键名。
+	for _, k := range keys {
+		// 检查环境变量是否存在。
+		if value, exists := os.LookupEnv(k); exists {
+			// 如果找到，返回环境变量的值。
+			return value
+		}
+	}
+	// 如果所有环境变量都不存在，返回默认值。
+	return defaultValue
 }
 
 func initSystem() {
@@ -59,7 +90,7 @@ func main() {
 	// 初始化 dao 包
 	singleton.InitConfigFromPath(dashboardCliParam.ConfigFile)
 	singleton.InitTimezoneAndCache()
-	singleton.InitDBFromPath(dashboardCliParam.DatebaseLocation)
+	singleton.InitDB(dashboardCliParam.DatabaseDriver, dashboardCliParam.DatabaseDsn)
 	singleton.InitLocalizer()
 	initSystem()
 

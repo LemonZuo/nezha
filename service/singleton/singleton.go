@@ -1,11 +1,13 @@
 package singleton
 
 import (
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"log"
 	"time"
 
 	"github.com/patrickmn/go-cache"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/naiba/nezha/model"
@@ -50,12 +52,25 @@ func InitConfigFromPath(path string) {
 	}
 }
 
-// InitDBFromPath 从给出的文件路径中加载数据库
-func InitDBFromPath(path string) {
+// InitDB 初始化数据库
+func InitDB(driver string, dsn string) {
 	var err error
-	DB, err = gorm.Open(sqlite.Open(path), &gorm.Config{
-		CreateBatchSize: 200,
-	})
+
+	if "sqlite" == driver {
+		DB, err = gorm.Open(sqlite.Open(dsn), &gorm.Config{
+			CreateBatchSize: 200,
+		})
+	} else if "mysql" == driver {
+		DB, err = gorm.Open(mysql.Open(dsn), &gorm.Config{
+			CreateBatchSize: 200,
+		})
+	} else if "postgres" == driver {
+		DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
+			CreateBatchSize: 200,
+		})
+	} else {
+		panic("unknown db driver")
+	}
 	if err != nil {
 		panic(err)
 	}
