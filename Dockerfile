@@ -1,12 +1,13 @@
-FROM alpine AS certs
-RUN apk update && apk add ca-certificates
-
-FROM busybox:stable-musl
+FROM alpine AS runner
 
 ARG TARGETOS
 ARG TARGETARCH
 
-COPY --from=certs /etc/ssl/certs /etc/ssl/certs
+RUN apk update \
+    && apk upgrade \
+    && apk add --no-cache ca-certificates tzdata \
+    && update-ca-certificates 2>/dev/null || true
+
 COPY ./script/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -15,6 +16,4 @@ COPY dist/dashboard-${TARGETOS}-${TARGETARCH} ./app
 
 VOLUME ["/dashboard/data"]
 EXPOSE 80 5555
-ARG TZ=Asia/Shanghai
-ENV TZ=$TZ
 ENTRYPOINT ["/entrypoint.sh"]
