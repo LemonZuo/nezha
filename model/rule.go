@@ -127,6 +127,19 @@ func (u *Rule) Snapshot(cycleTransferStats *CycleTransferStats, server *Server, 
 			// 加上历史数据的最大值
 			src += math.Max(float64(inRes.N), float64(outRes.N))
 		}
+	case "transfer_min_cycle":
+		src = math.Min(
+			float64(utils.Uint64SubInt64(server.State.NetInTransfer, server.PrevTransferInSnapshot)),
+			float64(utils.Uint64SubInt64(server.State.NetOutTransfer, server.PrevTransferOutSnapshot)),
+		)
+		if u.CycleInterval != 0 {
+			var inRes NResult
+			var outRes NResult
+			db.Model(&Transfer{}).Select("SUM(`in`) AS n").Where("`created_at` >= ? AND server_id = ?", u.GetTransferDurationStart().UTC(), server.ID).Scan(&inRes)
+			db.Model(&Transfer{}).Select("SUM(`out`) AS n").Where("`created_at` >= ? AND server_id = ?", u.GetTransferDurationStart().UTC(), server.ID).Scan(&outRes)
+			// 加上历史数据的最小值
+			src += math.Min(float64(inRes.N), float64(outRes.N))
+		}
 	case "load1":
 		src = server.State.Load1
 	case "load5":
