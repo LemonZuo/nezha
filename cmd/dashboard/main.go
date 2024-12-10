@@ -34,7 +34,7 @@ func init() {
 	flag.CommandLine.ParseErrorsWhitelist.UnknownFlags = true
 	flag.BoolVarP(&dashboardCliParam.Version, "version", "v", false, "查看当前版本号")
 	flag.StringVarP(&dashboardCliParam.ConfigFile, "config", "c", "data/config.yaml", "配置文件路径")
-	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite3", "数据库驱动")
+	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite", "数据库驱动")
 	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "data/sqlite.db", "数据库DSN")
 	flag.Parse()
 
@@ -111,7 +111,10 @@ func main() {
 		log.Println("NEZHA>> Graceful::START")
 		singleton.RecordTransferHourlyUsage()
 		log.Println("NEZHA>> Graceful::END")
-		srv.Shutdown(c)
+		err := srv.Shutdown(c)
+		if err != nil {
+			return err
+		}
 		return nil
 	}); err != nil {
 		log.Printf("NEZHA>> ERROR: %v", err)
@@ -126,9 +129,12 @@ func dispatchReportInfoTask() {
 		if server == nil || server.TaskStream == nil {
 			continue
 		}
-		server.TaskStream.Send(&proto.Task{
+		err := server.TaskStream.Send(&proto.Task{
 			Type: model.TaskTypeReportHostInfo,
 			Data: "",
 		})
+		if err != nil {
+			return
+		}
 	}
 }
