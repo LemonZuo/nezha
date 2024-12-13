@@ -26,17 +26,16 @@ type CommonResponse struct {
 }
 
 type RegisterServer struct {
-	Name		 string
-	Tag			 string
-	Note		 string
+	Name         string
+	Tag          string
+	Note         string
 	HideForGuest string
 }
 
 type ServerRegisterResponse struct {
 	CommonResponse
-	Secret 			string `json:"secret"`
+	Secret string `json:"secret"`
 }
-
 
 type CommonServerInfo struct {
 	ID           uint64 `json:"id"`

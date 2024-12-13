@@ -1,12 +1,15 @@
 module github.com/naiba/nezha
 
-go 1.21
+go 1.22
+
+toolchain go1.22.5
 
 require (
 	code.cloudfoundry.org/bytefmt v0.0.0-20240425163905-bcdc1ad063ea
 	code.gitea.io/sdk/gitea v0.18.0
 	github.com/BurntSushi/toml v1.3.2
 	github.com/coreos/go-oidc/v3 v3.11.0
+	github.com/elastic/go-elasticsearch/v8 v8.16.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/go-github/v47 v47.1.0
@@ -50,11 +53,14 @@ require (
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/davidmz/go-pageant v1.0.2 // indirect
+	github.com/elastic/elastic-transport-go/v8 v8.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.2 // indirect
 	github.com/gin-contrib/sse v0.1.0 // indirect
 	github.com/go-fed/httpsig v1.1.0 // indirect
 	github.com/go-jose/go-jose/v4 v4.0.2 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
+	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.14.0 // indirect
@@ -89,6 +95,9 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.11 // indirect
+	go.opentelemetry.io/otel v1.28.0 // indirect
+	go.opentelemetry.io/otel/metric v1.28.0 // indirect
+	go.opentelemetry.io/otel/trace v1.28.0 // indirect
 	golang.org/x/arch v0.3.0 // indirect
 	golang.org/x/mod v0.18.0 // indirect
 	golang.org/x/sys v0.22.0 // indirect

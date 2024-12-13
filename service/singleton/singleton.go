@@ -12,6 +12,10 @@ import (
 
 	"github.com/naiba/nezha/model"
 	"github.com/naiba/nezha/pkg/utils"
+
+	"github.com/elastic/go-elasticsearch/v8"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
 
 var Version = "debug"
@@ -21,6 +25,7 @@ var (
 	Cache *cache.Cache
 	DB    *gorm.DB
 	Loc   *time.Location
+	ES    *elasticsearch.Client
 )
 
 func InitTimezoneAndCache() {
@@ -81,6 +86,20 @@ func InitDB(driver string, dsn string) {
 		model.Notification{}, model.AlertRule{}, model.Monitor{},
 		model.MonitorHistory{}, model.Cron{}, model.Transfer{},
 		model.ApiToken{}, model.NAT{}, model.DDNSProfile{})
+	if err != nil {
+		panic(err)
+	}
+}
+
+// InitES 初始化 ES
+func InitES(address, user, pass string) {
+	cfg := elasticsearch.Config{
+		Addresses: []string{address},
+		Username:  user,
+		Password:  pass,
+	}
+
+	ES, err := elasticsearch.NewTypedClient(cfg)
 	if err != nil {
 		panic(err)
 	}

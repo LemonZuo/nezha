@@ -24,6 +24,9 @@ type DashboardCliParam struct {
 	ConfigFile     string // 配置文件路径
 	DatabaseDriver string // 数据库驱动
 	DatabaseDsn    string // 数据库DSN
+	ESAddress      string // ES地址
+	ESUser         string // ES用户名
+	ESPass         string // ES密码
 }
 
 var (
@@ -36,6 +39,9 @@ func init() {
 	flag.StringVarP(&dashboardCliParam.ConfigFile, "config", "c", "data/config.yaml", "配置文件路径")
 	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite", "数据库驱动")
 	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "data/sqlite.db", "数据库DSN")
+	flag.StringVarP(&dashboardCliParam.ESAddress, "es-address", "e", "http://localhost:9200", "ES地址")
+	flag.StringVarP(&dashboardCliParam.ESUser, "es-user", "u", "elastic", "ES用户名")
+	flag.StringVarP(&dashboardCliParam.ESPass, "es-pass", "p", "your-password", "ES密码")
 	flag.Parse()
 
 	// 加载.env文件
@@ -92,6 +98,7 @@ func main() {
 	singleton.InitConfigFromPath(dashboardCliParam.ConfigFile)
 	singleton.InitTimezoneAndCache()
 	singleton.InitDB(dashboardCliParam.DatabaseDriver, dashboardCliParam.DatabaseDsn)
+	singleton.InitES(dashboardCliParam.ESAddress, dashboardCliParam.ESUser, dashboardCliParam.ESPass)
 	singleton.InitLocalizer()
 	initSystem()
 
