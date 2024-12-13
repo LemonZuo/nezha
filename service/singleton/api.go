@@ -1,14 +1,17 @@
 package singleton
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
 	"sync"
 	"time"
 
 	"github.com/naiba/nezha/model"
 	"github.com/naiba/nezha/pkg/utils"
+
+	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
 
 var (
@@ -359,80 +362,61 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}
 
 	// 构建查询
-	must := []map[string]interface{}{
-		{
-			"range": map[string]interface{}{
-				"created_at": map[string]interface{}{
-					"gte": time.Now().Add(-24 * time.Hour),
-				},
-			},
+	timeStr := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	createdAtRange := types.RangeQuery(map[string]interface{}{
+		"gte": timeStr,
+	})
+
+	rangeQuery := types.Query{
+		Range: map[string]types.RangeQuery{
+			"created_at": createdAtRange,
 		},
 	}
 
+	must := []types.Query{rangeQuery}
+
 	// 将传入的查询条件转换为ES查询
 	for k, v := range query {
-		must = append(must, map[string]interface{}{
-			"term": map[string]interface{}{
-				k: v,
+		must = append(must, types.Query{
+			Term: map[string]types.TermQuery{
+				k: {Value: v},
 			},
 		})
 	}
 
-	// 构建完整的查询体
-	searchBody := map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{
-				"must": must,
+	// 构建排序
+	sort := []types.SortCombinations{
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"monitor_id": {Order: &sortorder.Asc},
 			},
 		},
-		"sort": []map[string]interface{}{
-			{"monitor_id": "asc"},
-			{"created_at": "asc"},
+		&types.SortOptions{
+			SortOptions: map[string]types.FieldSort{
+				"created_at": {Order: &sortorder.Asc},
+			},
 		},
-		"size": 10000,
 	}
 
-	// 转换为JSON
-	searchJSON, err := json.Marshal(searchBody)
-	if err != nil {
-		res.CommonResponse = CommonResponse{
-			Code:    500,
-			Message: err.Error(),
-		}
-		return res
+	// 构建请求
+	size := 10000
+	req := &search.Request{
+		Query: &types.Query{
+			Bool: &types.BoolQuery{
+				Must: must,
+			},
+		},
+		Sort: sort,
+		Size: &size,
 	}
 
 	// 执行搜索
-	response, err := ES.Search(
-		ES.Search.WithContext(context.Background()),
-		ES.Search.WithIndex("monitor_histories"),
-		ES.Search.WithBody(bytes.NewReader(searchJSON)),
-	)
+	response, err := ES.Search().
+		Index("nezha-monitor-histories").
+		Request(req).
+		Do(context.Background())
 
 	if err != nil {
-		res.CommonResponse = CommonResponse{
-			Code:    500,
-			Message: err.Error(),
-		}
-		return res
-	}
-	defer response.Body.Close()
-
-	// 解析响应
-	var searchResult struct {
-		Hits struct {
-			Hits []struct {
-				Source struct {
-					MonitorID uint64    `json:"monitor_id"`
-					ServerID  uint64    `json:"server_id"`
-					CreatedAt time.Time `json:"created_at"`
-					AvgDelay  float32   `json:"avg_delay"`
-				} `json:"_source"`
-			} `json:"hits"`
-		} `json:"hits"`
-	}
-
-	if err := json.NewDecoder(response.Body).Decode(&searchResult); err != nil {
 		res.CommonResponse = CommonResponse{
 			Code:    500,
 			Message: err.Error(),
@@ -441,8 +425,18 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}
 
 	// 处理结果
-	for _, hit := range searchResult.Hits.Hits {
-		history := hit.Source
+	for _, hit := range response.Hits.Hits {
+		var history struct {
+			MonitorID uint64    `json:"monitor_id"`
+			ServerID  uint64    `json:"server_id"`
+			CreatedAt time.Time `json:"created_at"`
+			AvgDelay  float32   `json:"avg_delay"`
+		}
+
+		if err := json.Unmarshal(hit.Source_, &history); err != nil {
+			continue
+		}
+
 		infos, ok := resultMap[history.MonitorID]
 		if !ok {
 			infos = &MonitorInfo{

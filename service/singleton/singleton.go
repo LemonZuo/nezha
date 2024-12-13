@@ -23,7 +23,7 @@ var (
 	Cache *cache.Cache
 	DB    *gorm.DB
 	Loc   *time.Location
-	ES    *elasticsearch.Client
+	ES    *elasticsearch.TypedClient
 )
 
 func InitTimezoneAndCache() {
@@ -100,7 +100,7 @@ func InitES(address, username, password string) {
 	}
 
 	// Create a new client
-	ES, err = elasticsearch.NewClient(cfg)
+	ES, err = elasticsearch.NewTypedClient(cfg)
 	if ES == nil || err != nil {
 		panic(err)
 	}
