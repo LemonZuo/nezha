@@ -362,7 +362,8 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}
 
 	// 构建查询
-	timeStr := time.Now().Add(-24 * time.Hour).Format(time.RFC3339)
+	// 将查询时间调整为当地时区
+	timeStr := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
 	createdAtRange := types.RangeQuery(map[string]interface{}{
 		"gte": timeStr,
 	})
