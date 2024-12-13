@@ -14,8 +14,6 @@ import (
 	"github.com/naiba/nezha/pkg/utils"
 
 	"github.com/elastic/go-elasticsearch/v8"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
 
 var Version = "debug"
@@ -92,15 +90,18 @@ func InitDB(driver string, dsn string) {
 }
 
 // InitES 初始化 ES
-func InitES(address, user, pass string) {
+func InitES(address, username, password string) {
+	var err error
+
 	cfg := elasticsearch.Config{
 		Addresses: []string{address},
-		Username:  user,
-		Password:  pass,
+		Username:  username,
+		Password:  password,
 	}
 
-	ES, err := elasticsearch.NewTypedClient(cfg)
-	if err != nil {
+	// Create a new client
+	ES, err = elasticsearch.NewClient(cfg)
+	if ES == nil || err != nil {
 		panic(err)
 	}
 }

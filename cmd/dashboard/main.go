@@ -20,13 +20,14 @@ import (
 )
 
 type DashboardCliParam struct {
-	Version        bool   // 当前版本号
-	ConfigFile     string // 配置文件路径
-	DatabaseDriver string // 数据库驱动
-	DatabaseDsn    string // 数据库DSN
-	ESAddress      string // ES地址
-	ESUser         string // ES用户名
-	ESPass         string // ES密码
+	Version               bool   // 当前版本号
+	ConfigFile            string // 配置文件路径
+	DatabaseDriver        string // 数据库驱动
+	DatabaseDsn           string // 数据库DSN
+	ElasticsearchHosts    string // ES地址
+	ElasticsearchUsername string // ES用户名
+	ElasticsearchPassword string // ES密码
+
 }
 
 var (
@@ -39,9 +40,9 @@ func init() {
 	flag.StringVarP(&dashboardCliParam.ConfigFile, "config", "c", "data/config.yaml", "配置文件路径")
 	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite", "数据库驱动")
 	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "data/sqlite.db", "数据库DSN")
-	flag.StringVarP(&dashboardCliParam.ESAddress, "es-address", "e", "http://localhost:9200", "ES地址")
-	flag.StringVarP(&dashboardCliParam.ESUser, "es-user", "u", "elastic", "ES用户名")
-	flag.StringVarP(&dashboardCliParam.ESPass, "es-pass", "p", "your-password", "ES密码")
+	flag.StringVarP(&dashboardCliParam.ElasticsearchHosts, "es-address", "e", "http://localhost:9200", "Elasticsearch地址")
+	flag.StringVarP(&dashboardCliParam.ElasticsearchUsername, "es-username", "u", "", "Elasticsearch用户名")
+	flag.StringVarP(&dashboardCliParam.ElasticsearchPassword, "es-password", "p", "", "Elasticsearch密码")
 	flag.Parse()
 
 	// 加载.env文件
@@ -51,9 +52,15 @@ func init() {
 	}
 	driver := getEnvStr("DATABASE_DRIVER", dashboardCliParam.DatabaseDriver)
 	dsn := getEnvStr("DATABASE_DSN", dashboardCliParam.DatabaseDsn)
+	elasticsearchHosts := getEnvStr("ELASTICSEARCH_HOSTS", dashboardCliParam.ElasticsearchHosts)
+	elasticsearchUsername := getEnvStr("ELASTICSEARCH_USERNAME", dashboardCliParam.ElasticsearchUsername)
+	elasticsearchPassword := getEnvStr("ELASTICSEARCH_PASSWORD", dashboardCliParam.ElasticsearchPassword)
 
 	dashboardCliParam.DatabaseDriver = driver
 	dashboardCliParam.DatabaseDsn = dsn
+	dashboardCliParam.ElasticsearchHosts = elasticsearchHosts
+	dashboardCliParam.ElasticsearchUsername = elasticsearchUsername
+	dashboardCliParam.ElasticsearchPassword = elasticsearchPassword
 
 }
 
@@ -98,7 +105,7 @@ func main() {
 	singleton.InitConfigFromPath(dashboardCliParam.ConfigFile)
 	singleton.InitTimezoneAndCache()
 	singleton.InitDB(dashboardCliParam.DatabaseDriver, dashboardCliParam.DatabaseDsn)
-	singleton.InitES(dashboardCliParam.ESAddress, dashboardCliParam.ESUser, dashboardCliParam.ESPass)
+	singleton.InitES(dashboardCliParam.ElasticsearchHosts, dashboardCliParam.ElasticsearchUsername, dashboardCliParam.ElasticsearchPassword)
 	singleton.InitLocalizer()
 	initSystem()
 

@@ -1,6 +1,9 @@
 package singleton
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"sync"
 	"time"
 
@@ -289,7 +292,17 @@ func (s *ServerAPIService) Register(rs *RegisterServer) *ServerRegisterResponse 
 	}
 }
 
+// GetMonitorHistories 获取监控历史
 func (m *MonitorAPIService) GetMonitorHistories(query map[string]any) *MonitorInfoResponse {
+	if ES != nil {
+		return m.getMonitorHistoriesFromES(query)
+	} else {
+		return m.getMonitorHistoriesFromDB(query)
+	}
+}
+
+// GetMonitorHistoriesFromDB 从数据库获取监控历史
+func (m *MonitorAPIService) getMonitorHistoriesFromDB(query map[string]any) *MonitorInfoResponse {
 	var (
 		resultMap        = make(map[uint64]*MonitorInfo)
 		monitorHistories []*model.MonitorHistory
@@ -328,5 +341,128 @@ func (m *MonitorAPIService) GetMonitorHistories(query map[string]any) *MonitorIn
 			res.Result = append(res.Result, resultMap[monitorID])
 		}
 	}
+	return res
+}
+
+// GetMonitorHistoriesFromES 从ES获取监控历史
+func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *MonitorInfoResponse {
+	var (
+		resultMap        = make(map[uint64]*MonitorInfo)
+		sortedMonitorIDs []uint64
+	)
+
+	res := &MonitorInfoResponse{
+		CommonResponse: CommonResponse{
+			Code:    0,
+			Message: "success",
+		},
+	}
+
+	// 构建查询
+	must := []map[string]interface{}{
+		{
+			"range": map[string]interface{}{
+				"created_at": map[string]interface{}{
+					"gte": time.Now().Add(-24 * time.Hour),
+				},
+			},
+		},
+	}
+
+	// 将传入的查询条件转换为ES查询
+	for k, v := range query {
+		must = append(must, map[string]interface{}{
+			"term": map[string]interface{}{
+				k: v,
+			},
+		})
+	}
+
+	// 构建完整的查询体
+	searchBody := map[string]interface{}{
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"must": must,
+			},
+		},
+		"sort": []map[string]interface{}{
+			{"monitor_id": "asc"},
+			{"created_at": "asc"},
+		},
+		"size": 10000,
+	}
+
+	// 转换为JSON
+	searchJSON, err := json.Marshal(searchBody)
+	if err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
+	}
+
+	// 执行搜索
+	response, err := ES.Search(
+		ES.Search.WithContext(context.Background()),
+		ES.Search.WithIndex("monitor_histories"),
+		ES.Search.WithBody(bytes.NewReader(searchJSON)),
+	)
+
+	if err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
+	}
+	defer response.Body.Close()
+
+	// 解析响应
+	var searchResult struct {
+		Hits struct {
+			Hits []struct {
+				Source struct {
+					MonitorID uint64    `json:"monitor_id"`
+					ServerID  uint64    `json:"server_id"`
+					CreatedAt time.Time `json:"created_at"`
+					AvgDelay  float32   `json:"avg_delay"`
+				} `json:"_source"`
+			} `json:"hits"`
+		} `json:"hits"`
+	}
+
+	if err := json.NewDecoder(response.Body).Decode(&searchResult); err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
+	}
+
+	// 处理结果
+	for _, hit := range searchResult.Hits.Hits {
+		history := hit.Source
+		infos, ok := resultMap[history.MonitorID]
+		if !ok {
+			infos = &MonitorInfo{
+				MonitorID:   history.MonitorID,
+				ServerID:    history.ServerID,
+				MonitorName: ServiceSentinelShared.monitors[history.MonitorID].Name,
+				ServerName:  ServerList[history.ServerID].Name,
+			}
+			resultMap[history.MonitorID] = infos
+			sortedMonitorIDs = append(sortedMonitorIDs, history.MonitorID)
+		}
+
+		infos.CreatedAt = append(infos.CreatedAt, history.CreatedAt.Truncate(time.Minute).Unix()*1000)
+		infos.AvgDelay = append(infos.AvgDelay, history.AvgDelay)
+	}
+
+	// 按照监控ID排序添加到结果中
+	for _, monitorID := range sortedMonitorIDs {
+		res.Result = append(res.Result, resultMap[monitorID])
+	}
+
 	return res
 }
