@@ -399,58 +399,73 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}
 
 	// 构建请求
-	size := 10000
+	trackTotalHits := true
 	req := &search.Request{
 		Query: &types.Query{
 			Bool: &types.BoolQuery{
 				Must: must,
 			},
 		},
-		Sort: sort,
-		Size: &size,
+		Sort:           sort,
+		TrackTotalHits: &trackTotalHits,
 	}
 
-	// 执行搜索
-	response, err := ES.Search().
-		Index("nezha-monitor-histories").
-		Request(req).
-		Do(context.Background())
+	// 分页获取所有数据
+	batchSize := 10000
+	from := 0
 
-	if err != nil {
-		res.CommonResponse = CommonResponse{
-			Code:    500,
-			Message: err.Error(),
-		}
-		return res
-	}
+	for {
+		response, err := ES.Search().
+			Index("nezha-monitor-histories").
+			Request(req).
+			From(from).
+			Size(batchSize).
+			Do(context.Background())
 
-	// 处理结果
-	for _, hit := range response.Hits.Hits {
-		var history struct {
-			MonitorID uint64    `json:"monitor_id"`
-			ServerID  uint64    `json:"server_id"`
-			CreatedAt time.Time `json:"created_at"`
-			AvgDelay  float32   `json:"avg_delay"`
-		}
-
-		if err := json.Unmarshal(hit.Source_, &history); err != nil {
-			continue
-		}
-
-		infos, ok := resultMap[history.MonitorID]
-		if !ok {
-			infos = &MonitorInfo{
-				MonitorID:   history.MonitorID,
-				ServerID:    history.ServerID,
-				MonitorName: ServiceSentinelShared.monitors[history.MonitorID].Name,
-				ServerName:  ServerList[history.ServerID].Name,
+		if err != nil {
+			res.CommonResponse = CommonResponse{
+				Code:    500,
+				Message: err.Error(),
 			}
-			resultMap[history.MonitorID] = infos
-			sortedMonitorIDs = append(sortedMonitorIDs, history.MonitorID)
+			return res
 		}
 
-		infos.CreatedAt = append(infos.CreatedAt, history.CreatedAt.Truncate(time.Minute).Unix()*1000)
-		infos.AvgDelay = append(infos.AvgDelay, history.AvgDelay)
+		// 处理当前批次的结果
+		for _, hit := range response.Hits.Hits {
+			var history struct {
+				MonitorID uint64    `json:"monitor_id"`
+				ServerID  uint64    `json:"server_id"`
+				CreatedAt time.Time `json:"created_at"`
+				AvgDelay  float32   `json:"avg_delay"`
+			}
+
+			if err := json.Unmarshal(hit.Source_, &history); err != nil {
+				continue
+			}
+
+			infos, ok := resultMap[history.MonitorID]
+			if !ok {
+				infos = &MonitorInfo{
+					MonitorID:   history.MonitorID,
+					ServerID:    history.ServerID,
+					MonitorName: ServiceSentinelShared.monitors[history.MonitorID].Name,
+					ServerName:  ServerList[history.ServerID].Name,
+				}
+				resultMap[history.MonitorID] = infos
+				sortedMonitorIDs = append(sortedMonitorIDs, history.MonitorID)
+			}
+
+			infos.CreatedAt = append(infos.CreatedAt, history.CreatedAt.Truncate(time.Minute).Unix()*1000)
+			infos.AvgDelay = append(infos.AvgDelay, history.AvgDelay)
+		}
+
+		// 如果获取的数量小于请求的数量，说明已经获取完所有数据
+		if len(response.Hits.Hits) < batchSize {
+			break
+		}
+
+		// 更新偏移量
+		from += batchSize
 	}
 
 	// 按照监控ID排序添加到结果中
