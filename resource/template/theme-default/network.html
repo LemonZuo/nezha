@@ -18,6 +18,17 @@
         </div>
     </div>
     <div class="ui container">
+        <div class="ui small buttons time-range-buttons">
+            <button class="ui button"
+                    v-for="(label, range) in timeRanges"
+                    :key="range"
+                    :class="{'active': timeRange === range}"
+                    @click="changeTimeRange(range)">
+                @#label#@
+            </button>
+        </div>
+    </div>
+    <div class="ui container">
         <div ref="chartDom" style="margin-top: 15px;height: auto;overflow: hidden"></div>
     </div>
 </div>
@@ -36,7 +47,17 @@
             defaultTemplate: {{.Conf.Site.Theme}},
             templates: {{.Themes}},
             servers: initData,
-            option: {}
+            option: {},
+            timeRange: '1', // 新增：默认时间范围
+                timeRanges: {     // 新增：时间范围选项
+                    '1': '24小时',
+                    '7': '7天',
+                    '30': '1个月',
+                    '90': '3个月',
+                    '180': '6个月',
+                    '360': '1年'
+            },
+            currentServerId: ''
         },
         mixins: [mixinsVue],
         created() {
@@ -100,6 +121,12 @@
             window.removeEventListener('resize', this.resizeHandle)
         },
         methods: {
+            changeTimeRange(range) {
+                this.timeRange = range;
+                if (this.currentServerId) {
+                    this.redirectNetwork(this.currentServerId);
+                }
+            },
             getFontLogoClass(str) {
                 if (["almalinux",
                         "alpine",
@@ -158,6 +185,7 @@
                 return '';
             },
             redirectNetwork(id) {
+                    this.currentServerId = id;
                     this.getMonitorHistory(id)
                     .then(function(monitorInfo) {
                           var vm = app.__vue__;
@@ -170,7 +198,8 @@
             getMonitorHistory(id) {
                   return $.ajax({
                     url: "/api/v1/monitor/"+id,
-                    method: "GET"
+                    method: "GET",
+                    data: { range: this.timeRange }
                   });
             },
             parseMonitorInfo(monitorInfo) {
@@ -265,5 +294,27 @@
         },
     });
 </script>
+
+<style>
+    .time-range-buttons {
+        margin: 1rem 0;
+    }
+
+    .time-range-buttons .button {
+        background-color: #f8f9fa !important;
+    }
+
+    .time-range-buttons .button.active {
+        background-color: #2185d0 !important;
+        color: white !important;
+    }
+
+    @media (max-width: 768px) {
+        .time-range-buttons .button {
+            padding: 8px 12px;
+            font-size: 0.9em;
+        }
+    }
+</style>
 
 {{end}}

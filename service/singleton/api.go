@@ -360,10 +360,36 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			Message: "success",
 		},
 	}
+	rangeValue, exists := query["range"]
+
+	if exists {
+		delete(query, "range")
+	} else {
+		rangeValue = 1
+	}
+
+	rangeDays, ok := rangeValue.(int)
+	if !ok {
+		rangeDays = 1
+	}
+
+	ctx := context.Background()
+
+	// 创建 PIT
+	pitResp, err := ES.OpenPointInTime("nezha-monitor-histories").
+		KeepAlive("5m").Do(ctx)
+	if err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
+	}
+	defer ES.ClosePointInTime().Id(pitResp.Id).Do(ctx)
 
 	// 构建查询
-	// 将查询时间调整为当地时区
-	timeStr := time.Now().Add(-24 * time.Hour).UTC().Format(time.RFC3339)
+	duration := -(time.Duration(rangeDays) * 24 * time.Hour)
+	timeStr := time.Now().Add(duration).UTC().Format(time.RFC3339)
 	createdAtRange := types.RangeQuery(map[string]interface{}{
 		"gte": timeStr,
 	})
@@ -399,7 +425,8 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		},
 	}
 
-	// 构建请求
+	// 构建基础请求
+	batchSize := 10000
 	trackTotalHits := true
 	req := &search.Request{
 		Query: &types.Query{
@@ -409,19 +436,22 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		},
 		Sort:           sort,
 		TrackTotalHits: &trackTotalHits,
+		Size:           &batchSize,
+		Pit: &types.PointInTimeReference{
+			Id: pitResp.Id,
+		},
 	}
 
-	// 分页获取所有数据
-	batchSize := 10000
-	from := 0
+	var searchAfter []types.FieldValue
 
 	for {
+		if searchAfter != nil {
+			req.SearchAfter = searchAfter
+		}
+
 		response, err := ES.Search().
-			Index("nezha-monitor-histories").
 			Request(req).
-			From(from).
-			Size(batchSize).
-			Do(context.Background())
+			Do(ctx)
 
 		if err != nil {
 			res.CommonResponse = CommonResponse{
@@ -431,8 +461,13 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			return res
 		}
 
+		hits := response.Hits.Hits
+		if len(hits) == 0 {
+			break
+		}
+
 		// 处理当前批次的结果
-		for _, hit := range response.Hits.Hits {
+		for _, hit := range hits {
 			var history struct {
 				MonitorID uint64    `json:"monitor_id"`
 				ServerID  uint64    `json:"server_id"`
@@ -460,13 +495,9 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			infos.AvgDelay = append(infos.AvgDelay, history.AvgDelay)
 		}
 
-		// 如果获取的数量小于请求的数量，说明已经获取完所有数据
-		if len(response.Hits.Hits) < batchSize {
-			break
-		}
-
-		// 更新偏移量
-		from += batchSize
+		// 获取最后一个文档的排序值用于下一次查询
+		lastHit := hits[len(hits)-1]
+		searchAfter = lastHit.Sort
 	}
 
 	// 按照监控ID排序添加到结果中

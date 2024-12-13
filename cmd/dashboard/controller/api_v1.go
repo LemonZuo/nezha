@@ -122,7 +122,6 @@ func (v *apiV1) RegisterServer(c *gin.Context) {
 	}
 }
 
-
 func (v *apiV1) monitorHistoriesById(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
@@ -148,5 +147,10 @@ func (v *apiV1) monitorHistoriesById(c *gin.Context) {
 		return
 	}
 
-	c.JSON(200, singleton.MonitorAPI.GetMonitorHistories(map[string]any{"server_id": server.ID}))
+	rangeDay, err := strconv.Atoi(c.Query("range"))
+	if err != nil {
+		rangeDay = 1
+	}
+
+	c.JSON(200, singleton.MonitorAPI.GetMonitorHistories(map[string]any{"server_id": server.ID, "range": rangeDay}))
 }
