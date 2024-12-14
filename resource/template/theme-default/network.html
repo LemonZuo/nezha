@@ -18,7 +18,7 @@
         </div>
     </div>
     <div class="ui container">
-        <div class="ui small buttons time-range-buttons">
+        <div class="ui small buttons time-range-buttons" style="margin-top: 15px;height: auto;overflow: hidden">
             <button class="ui button"
                     v-for="(label, range) in timeRanges"
                     :key="range"
@@ -62,6 +62,14 @@
         mixins: [mixinsVue],
         created() {
             this.option = {
+                animation: true,
+                animationDuration: 1000,
+                animationEasing: 'cubicOut',
+                animationThreshold: 50000,  // 如果数据量超过这个阈值，则不显示动画
+                universalTransition: {
+                    enabled: true,
+                    divideShape: 'clone'
+                },
                 tooltip: {
                     trigger: 'axis',
                     position: function (pt) {
@@ -297,22 +305,34 @@
 
 <style>
     .time-range-buttons {
-        margin: 1rem 0;
+        margin: 1.5rem 0;
+        display: flex;
+        justify-content: flex-start;
+        gap: 0.5rem;
     }
 
     .time-range-buttons .button {
         background-color: #f8f9fa !important;
+        color: #42526E !important;
+        transition: all 0.2s ease;
+        border: 1px solid #DFE1E6 !important;
+        padding: 8px 20px;
+    }
+
+    .time-range-buttons .button:hover {
+        background-color: #EBECF0 !important;
     }
 
     .time-range-buttons .button.active {
-        background-color: #2185d0 !important;
+        background-color: #0052CC !important;
         color: white !important;
+        border-color: #0052CC !important;
     }
 
     @media (max-width: 768px) {
         .time-range-buttons .button {
-            padding: 8px 12px;
-            font-size: 0.9em;
+            padding: 8px 16px;
+            font-size: 0.85em;
         }
     }
 </style>

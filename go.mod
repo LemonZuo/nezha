@@ -9,7 +9,7 @@ require (
 	code.gitea.io/sdk/gitea v0.18.0
 	github.com/BurntSushi/toml v1.3.2
 	github.com/coreos/go-oidc/v3 v3.11.0
-	github.com/elastic/go-elasticsearch/v8 v8.16.0
+	github.com/elastic/go-elasticsearch/v8 v8.4.1-0.20230220145653-25304d53a1b1
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/go-github/v47 v47.1.0

@@ -3,17 +3,17 @@ package singleton
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/core/closepointintime"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
-	"strings"
+	"io"
 	"sync"
 	"time"
 
 	"github.com/naiba/nezha/model"
 	"github.com/naiba/nezha/pkg/utils"
-
-	"github.com/elastic/go-elasticsearch/v8/esapi"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
 
 var (
@@ -374,15 +374,11 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	if !ok {
 		rangeDays = 1
 	}
-
 	ctx := context.Background()
 
-	// 使用 esapi 创建 PIT
-	pitRequest := esapi.OpenPointInTimeRequest{
-		Index:     []string{"nezha-monitor-histories"},
-		KeepAlive: "5m",
-	}
-	pitResponse, err := pitRequest.Do(ctx, ES)
+	pitResponse, err := ES.OpenPointInTime("nezha-monitor-histories").
+		KeepAlive("5m").
+		Do(ctx)
 	if err != nil {
 		res.CommonResponse = CommonResponse{
 			Code:    500,
@@ -390,12 +386,18 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		}
 		return res
 	}
-	defer pitResponse.Body.Close()
-
-	var pitResult struct {
-		Id string `json:"id"`
+	// 从response中获取PIT
+	var closePointInTimeReq closepointintime.Request
+	pitResponseBytes, err := io.ReadAll(pitResponse.Body)
+	if err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
 	}
-	if err := json.NewDecoder(pitResponse.Body).Decode(&pitResult); err != nil {
+	err = json.Unmarshal(pitResponseBytes, &closePointInTimeReq)
+	if err != nil {
 		res.CommonResponse = CommonResponse{
 			Code:    500,
 			Message: err.Error(),
@@ -403,46 +405,49 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		return res
 	}
 
-	defer func() {
-		closeRequest := esapi.ClosePointInTimeRequest{
-			Body: strings.NewReader(`{"id":"` + pitResult.Id + `"}`),
+	defer func(request *closepointintime.ClosePointInTime, ctx context.Context) {
+		_, err := request.Do(ctx)
+		if err != nil {
+			res.CommonResponse = CommonResponse{
+				Code:    500,
+				Message: err.Error(),
+			}
 		}
-		closeRequest.Do(context.Background(), ES)
-	}()
+	}(ES.ClosePointInTime().Request(&closePointInTimeReq), ctx)
 
 	// 构建查询
-	duration := -(time.Duration(rangeDays) * 24 * time.Hour)
-	timeStr := time.Now().Add(duration).UTC().Format(time.RFC3339)
-	createdAtRange := types.RangeQuery(map[string]interface{}{
-		"gte": timeStr,
-	})
 
-	rangeQuery := types.Query{
-		Range: map[string]types.RangeQuery{
-			"created_at": createdAtRange,
-		},
-	}
-
-	must := []types.Query{rangeQuery}
+	pastTime := time.Now().AddDate(0, 0, -rangeDays)
+	timeStr := pastTime.UTC().Format(time.RFC3339)
+	dateMath := types.NewDateMathBuilder().DateMath(types.DateMath(timeStr)).Build()
+	dateRangeQueryBuilder := types.NewDateRangeQueryBuilder().Gte(dateMath)
+	dateRangeQuery := types.NewRangeQueryBuilder().DateRangeQuery(dateRangeQueryBuilder)
+	dateRangeQueryContainer := types.NewQueryContainerBuilder().Range(map[types.Field]*types.RangeQueryBuilder{
+		"created_at": dateRangeQuery,
+	}).Build()
+	// containers = append(containers, dateRangeQueryContainer)
+	containers := []types.QueryContainer{dateRangeQueryContainer}
 
 	// 将传入的查询条件转换为ES查询
 	for k, v := range query {
-		must = append(must, types.Query{
-			Term: map[string]types.TermQuery{
-				k: {Value: v},
-			},
-		})
+		termQuery := types.NewTermQueryBuilder().Value(types.NewFieldValueBuilder().String(fmt.Sprintf("%v", v)))
+
+		queryContainer := types.NewQueryContainerBuilder().
+			Term(map[types.Field]*types.TermQueryBuilder{
+				types.Field(k): termQuery,
+			}).Build()
+		containers = append(containers, queryContainer)
 	}
 
+	// 构建最终的查询
+	finalQuery := types.NewQueryContainerBuilder().Bool(types.NewBoolQueryBuilder().Must(containers)).Build()
+
 	// 构建排序
-	sort := []types.SortCombinations{
+
+	sort := types.Sort{
 		&types.SortOptions{
-			SortOptions: map[string]types.FieldSort{
+			SortOptions: map[types.Field]types.FieldSort{
 				"monitor_id": {Order: &sortorder.Asc},
-			},
-		},
-		&types.SortOptions{
-			SortOptions: map[string]types.FieldSort{
 				"created_at": {Order: &sortorder.Asc},
 			},
 		},
@@ -450,27 +455,25 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 
 	// 构建基础请求
 	batchSize := 10000
-	trackTotalHits := true
+	trackTotalHits := types.NewTrackHitsBuilder().Bool(true).Build()
 	req := &search.Request{
-		Query: &types.Query{
-			Bool: &types.BoolQuery{
-				Must: must,
-			},
-		},
-		Sort:           sort,
+		Query:          &finalQuery,
+		Sort:           &sort,
 		TrackTotalHits: &trackTotalHits,
 		Size:           &batchSize,
 		Pit: &types.PointInTimeReference{
-			Id: pitResult.Id,
+			Id: closePointInTimeReq.Id,
 		},
 	}
 
-	var searchAfter []types.FieldValue
+	var searchAfter *types.SortResults
 
 	for {
 		if searchAfter != nil {
 			req.SearchAfter = searchAfter
 		}
+		requestBody, _ := json.Marshal(req)
+		fmt.Printf("Request body: %s\n", string(requestBody))
 
 		response, err := ES.Search().
 			Request(req).
@@ -484,7 +487,43 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			return res
 		}
 
-		hits := response.Hits.Hits
+		// 定义自定义的响应结构
+		var esResponse struct {
+			Took     int64 `json:"took"`
+			TimedOut bool  `json:"timed_out"`
+			Shards   struct {
+				Total      int `json:"total"`
+				Successful int `json:"successful"`
+				Skipped    int `json:"skipped"`
+				Failed     int `json:"failed"`
+			} `json:"_shards"`
+			Hits struct {
+				Total struct {
+					Value    int64  `json:"value"`
+					Relation string `json:"relation"`
+				} `json:"total"`
+				MaxScore interface{} `json:"max_score"`
+				Hits     []struct {
+					Index  string                 `json:"_index"`
+					ID     string                 `json:"_id"`
+					Score  interface{}            `json:"_score"`
+					Source map[string]interface{} `json:"_source"`
+					Sort   []interface{}          `json:"sort"`
+				} `json:"hits"`
+			} `json:"hits"`
+		}
+
+		// 解析响应
+		if err := json.NewDecoder(response.Body).Decode(&esResponse); err != nil {
+			res.CommonResponse = CommonResponse{
+				Code:    500,
+				Message: "Failed to decode response: " + err.Error(),
+			}
+			return res
+		}
+		defer response.Body.Close()
+
+		hits := esResponse.Hits.Hits
 		if len(hits) == 0 {
 			break
 		}
@@ -498,7 +537,14 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 				AvgDelay  float32   `json:"avg_delay"`
 			}
 
-			if err := json.Unmarshal(hit.Source_, &history); err != nil {
+			// 将 source 转换为 JSON 字节数组
+			sourceBytes, err := json.Marshal(hit.Source)
+			if err != nil {
+				continue
+			}
+
+			// 解析为目标结构体
+			if err := json.Unmarshal(sourceBytes, &history); err != nil {
 				continue
 			}
 
@@ -518,9 +564,26 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			infos.AvgDelay = append(infos.AvgDelay, history.AvgDelay)
 		}
 
-		// 获取最后一个文档的排序值用于下一次查询
-		lastHit := hits[len(hits)-1]
-		searchAfter = lastHit.Sort
+		// 获取下一次查询的 search_after 值
+		if len(hits) > 0 {
+			lastHit := hits[len(hits)-1]
+			// 将 []interface{} 转换为 []string
+			sortValues := make(types.SortResults, len(lastHit.Sort))
+			for i, v := range lastHit.Sort {
+				// 将 interface{} 转换为 string
+				switch val := v.(type) {
+				case string:
+					sortValues[i] = val
+				case float64:
+					sortValues[i] = fmt.Sprintf("%v", val)
+				case int64:
+					sortValues[i] = fmt.Sprintf("%v", val)
+				default:
+					sortValues[i] = fmt.Sprintf("%v", val)
+				}
+			}
+			searchAfter = &sortValues
+		}
 	}
 
 	// 按照监控ID排序添加到结果中
