@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/naiba/nezha/model"
 	"github.com/naiba/nezha/pkg/utils"
 
+	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
@@ -375,9 +377,12 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 
 	ctx := context.Background()
 
-	// 创建 PIT
-	pitResp, err := ES.OpenPointInTime("nezha-monitor-histories").
-		KeepAlive("5m").Do(ctx)
+	// 使用 esapi 创建 PIT
+	pitRequest := esapi.OpenPointInTimeRequest{
+		Index:     []string{"nezha-monitor-histories"},
+		KeepAlive: "5m",
+	}
+	pitResponse, err := pitRequest.Do(ctx, ES)
 	if err != nil {
 		res.CommonResponse = CommonResponse{
 			Code:    500,
@@ -385,7 +390,25 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		}
 		return res
 	}
-	defer ES.ClosePointInTime().Id(pitResp.Id).Do(ctx)
+	defer pitResponse.Body.Close()
+
+	var pitResult struct {
+		Id string `json:"id"`
+	}
+	if err := json.NewDecoder(pitResponse.Body).Decode(&pitResult); err != nil {
+		res.CommonResponse = CommonResponse{
+			Code:    500,
+			Message: err.Error(),
+		}
+		return res
+	}
+
+	defer func() {
+		closeRequest := esapi.ClosePointInTimeRequest{
+			Body: strings.NewReader(`{"id":"` + pitResult.Id + `"}`),
+		}
+		closeRequest.Do(context.Background(), ES)
+	}()
 
 	// 构建查询
 	duration := -(time.Duration(rangeDays) * 24 * time.Hour)
@@ -438,7 +461,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		TrackTotalHits: &trackTotalHits,
 		Size:           &batchSize,
 		Pit: &types.PointInTimeReference{
-			Id: pitResp.Id,
+			Id: pitResult.Id,
 		},
 	}
 
