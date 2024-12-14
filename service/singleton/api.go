@@ -586,18 +586,15 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		// 获取下一次查询的 search_after 值
 		if len(hits) > 0 {
 			lastHit := hits[len(hits)-1]
-			// 将 []interface{} 转换为 []string
+			// 保留所有排序值
 			sortValues := make(types.SortResults, len(lastHit.Sort))
 			for i, v := range lastHit.Sort {
-				// 将 interface{} 转换为 string
 				switch val := v.(type) {
-				case string:
-					sortValues[i] = val
 				case float64:
-					sortValues[i] = fmt.Sprintf("%v", val)
-				case int64:
-					sortValues[i] = fmt.Sprintf("%v", val)
+					// 对于数字类型（时间戳等），保持数字格式
+					sortValues[i] = fmt.Sprintf("%.0f", val)
 				default:
+					// 其他类型直接转字符串
 					sortValues[i] = fmt.Sprintf("%v", val)
 				}
 			}
