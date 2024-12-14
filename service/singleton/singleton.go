@@ -1,6 +1,7 @@
 package singleton
 
 import (
+	"fmt"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -91,6 +92,7 @@ func InitDB(driver string, dsn string) {
 
 // InitES 初始化 ES
 func InitES(address, username, password string) {
+	log.Println("NEZHA>> 初始化 Elasticsearch 连接...")
 	var err error
 
 	cfg := elasticsearch.Config{
@@ -98,11 +100,12 @@ func InitES(address, username, password string) {
 		Username:  username,
 		Password:  password,
 	}
+	log.Println(fmt.Sprintf("NEZHA>> Elasticsearch Host: %s", address))
 
 	// Create a new client
 	ES, err = elasticsearch.NewTypedClient(cfg)
 	if ES == nil || err != nil {
-		panic(err)
+		log.Println(fmt.Sprintf("NEZHA>> 初始化 Elasticsearch 连接失败: %v", err))
 	}
 }
 

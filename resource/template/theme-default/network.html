@@ -17,7 +17,7 @@
             </table>
         </div>
     </div>
-    <div class="ui container">
+    <div class="ui container" v-if="elasticsearchEnabled && currentServerId">
         <div class="ui small buttons time-range-buttons" style="margin-top: 15px;height: auto;overflow: hidden">
             <button class="ui button"
                     v-for="(label, range) in timeRanges"
@@ -57,7 +57,8 @@
                     '180': '6个月',
                     '360': '1年'
             },
-            currentServerId: ''
+            currentServerId: '',
+            elasticsearchEnabled: false,
         },
         mixins: [mixinsVue],
         created() {
@@ -121,6 +122,7 @@
             }
         },
         mounted() {
+            this.checkElasticsearchEnable();
             this.renderChart();
             this.parseMonitorInfo(monitorInfo);
             window.addEventListener('resize', this.resizeHandle);
@@ -129,7 +131,27 @@
             window.removeEventListener('resize', this.resizeHandle)
         },
         methods: {
+            // 添加检查 elasticsearch 状态的方法
+            checkElasticsearchEnable() {
+                fetch('/api/v1/monitor/elasticsearch-enable')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.elasticsearchEnabled = data.result;
+                        // 如果 elasticsearch 未启用，强制设置 timeRange 为 1
+                        if (!this.elasticsearchEnabled) {
+                            this.timeRange = '1';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Failed to check elasticsearch status:', error);
+                        this.elasticsearchEnabled = false;
+                        this.timeRange = '1';
+                    });
+            },
             changeTimeRange(range) {
+                if (!this.elasticsearchEnabled || !this.currentServerId) {
+                    return;
+                }
                 this.timeRange = range;
                 if (this.currentServerId) {
                     this.redirectNetwork(this.currentServerId);

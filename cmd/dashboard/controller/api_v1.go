@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"net/http"
 	"strconv"
 	"strings"
 
@@ -44,6 +45,14 @@ func (v *apiV1) serve() {
 		AbortWhenFail: true,
 	}))
 	mr.GET("/:id", v.monitorHistoriesById)
+	// elasticsearch是否开启
+	mr.GET("/elasticsearch-enable", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"result":  singleton.ES != nil,
+		})
+	})
 }
 
 // serverList 获取服务器列表 不传入Query参数则获取全部

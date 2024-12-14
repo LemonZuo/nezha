@@ -1,6 +1,7 @@
 package singleton
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
 	"io"
+	"log"
 	"sync"
 	"time"
 
@@ -416,7 +418,6 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}(ES.ClosePointInTime().Request(&closePointInTimeReq), ctx)
 
 	// 构建查询
-
 	pastTime := time.Now().AddDate(0, 0, -rangeDays)
 	timeStr := pastTime.UTC().Format(time.RFC3339)
 	dateMath := types.NewDateMathBuilder().DateMath(types.DateMath(timeStr)).Build()
@@ -425,7 +426,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	dateRangeQueryContainer := types.NewQueryContainerBuilder().Range(map[types.Field]*types.RangeQueryBuilder{
 		"created_at": dateRangeQuery,
 	}).Build()
-	// containers = append(containers, dateRangeQueryContainer)
+
 	containers := []types.QueryContainer{dateRangeQueryContainer}
 
 	// 将传入的查询条件转换为ES查询
@@ -443,7 +444,6 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	finalQuery := types.NewQueryContainerBuilder().Bool(types.NewBoolQueryBuilder().Must(containers)).Build()
 
 	// 构建排序
-
 	sort := types.Sort{
 		&types.SortOptions{
 			SortOptions: map[types.Field]types.FieldSort{
@@ -472,8 +472,11 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		if searchAfter != nil {
 			req.SearchAfter = searchAfter
 		}
-		requestBody, _ := json.Marshal(req)
-		fmt.Printf("Request body: %s\n", string(requestBody))
+
+		if Conf.Debug {
+			requestBody, _ := json.Marshal(req)
+			log.Println(fmt.Sprintf("Elasticsearch Request body: %s", string(requestBody)))
+		}
 
 		response, err := ES.Search().
 			Request(req).
@@ -513,6 +516,16 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			} `json:"hits"`
 		}
 
+		if Conf.Debug {
+			// 先打印响应内容
+			bodyBytes, _ := io.ReadAll(response.Body)
+			log.Println(fmt.Sprintf("Elasticsearch Response body: %s", string(bodyBytes)))
+			log.Println(fmt.Sprintf("Elasticsearch Response status: %d", response.StatusCode))
+
+			// 重新创建一个新的 Reader，因为 ReadAll 会消耗掉原来的内容
+			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
+
 		// 解析响应
 		if err := json.NewDecoder(response.Body).Decode(&esResponse); err != nil {
 			res.CommonResponse = CommonResponse{
@@ -521,7 +534,13 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			}
 			return res
 		}
-		defer response.Body.Close()
+		defer func(Body io.ReadCloser) {
+			err := Body.Close()
+			if err != nil {
+				fmt.Printf("Failed to close response body, %v", err)
+				return
+			}
+		}(response.Body)
 
 		hits := esResponse.Hits.Hits
 		if len(hits) == 0 {
