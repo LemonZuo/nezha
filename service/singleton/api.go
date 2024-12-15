@@ -382,6 +382,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		KeepAlive("5m").
 		Do(ctx)
 	if err != nil {
+		log.Println(fmt.Sprintf("Failed to open point in time: %v", err))
 		res.CommonResponse = CommonResponse{
 			Code:    500,
 			Message: err.Error(),
@@ -392,6 +393,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	var closePointInTimeReq closepointintime.Request
 	pitResponseBytes, err := io.ReadAll(pitResponse.Body)
 	if err != nil {
+		log.Println(fmt.Sprintf("Failed to read response body, %v", err))
 		res.CommonResponse = CommonResponse{
 			Code:    500,
 			Message: err.Error(),
@@ -400,6 +402,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	}
 	err = json.Unmarshal(pitResponseBytes, &closePointInTimeReq)
 	if err != nil {
+		log.Println(fmt.Sprintf("Failed to unmarshal response body, %v", err))
 		res.CommonResponse = CommonResponse{
 			Code:    500,
 			Message: err.Error(),
@@ -410,6 +413,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	defer func(request *closepointintime.ClosePointInTime, ctx context.Context) {
 		_, err := request.Do(ctx)
 		if err != nil {
+			log.Println(fmt.Sprintf("Failed to close point in time: %v", err))
 			res.CommonResponse = CommonResponse{
 				Code:    500,
 				Message: err.Error(),
@@ -519,8 +523,8 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 		if Conf.Debug {
 			// 先打印响应内容
 			bodyBytes, _ := io.ReadAll(response.Body)
-			log.Println(fmt.Sprintf("Elasticsearch Response body: %s", string(bodyBytes)))
-			log.Println(fmt.Sprintf("Elasticsearch Response status: %d", response.StatusCode))
+			log.Println(fmt.Sprintf("Elasticsearch Response status: %d, body: %s", response.StatusCode, string(bodyBytes)))
+			log.Println(fmt.Sprintf("Elasticsearch Response "))
 
 			// 重新创建一个新的 Reader，因为 ReadAll 会消耗掉原来的内容
 			response.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
@@ -559,6 +563,7 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 			// 将 source 转换为 JSON 字节数组
 			sourceBytes, err := json.Marshal(hit.Source)
 			if err != nil {
+				log.Println(fmt.Sprintf("Failed to marshal source: %v", err))
 				continue
 			}
 
