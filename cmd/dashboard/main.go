@@ -24,6 +24,7 @@ type DashboardCliParam struct {
 	ConfigFile            string // 配置文件路径
 	DatabaseDriver        string // 数据库驱动
 	DatabaseDsn           string // 数据库DSN
+	ElasticsearchEnable   string // 是否开启Elasticsearch
 	ElasticsearchHosts    string // ES地址
 	ElasticsearchUsername string // ES用户名
 	ElasticsearchPassword string // ES密码
@@ -38,9 +39,10 @@ func init() {
 	flag.CommandLine.ParseErrorsWhitelist.UnknownFlags = true
 	flag.BoolVarP(&dashboardCliParam.Version, "version", "v", false, "查看当前版本号")
 	flag.StringVarP(&dashboardCliParam.ConfigFile, "config", "c", "data/config.yaml", "配置文件路径")
-	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "sqlite", "数据库驱动")
-	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "data/sqlite.db", "数据库DSN")
-	flag.StringVarP(&dashboardCliParam.ElasticsearchHosts, "es-address", "e", "http://localhost:9200", "Elasticsearch地址")
+	flag.StringVarP(&dashboardCliParam.DatabaseDriver, "driver", "d", "", "数据库驱动")
+	flag.StringVarP(&dashboardCliParam.DatabaseDsn, "dsn", "s", "", "数据库DSN")
+	flag.StringVarP(&dashboardCliParam.ElasticsearchEnable, "es-enable", "e", "", "是否开启Elasticsearch")
+	flag.StringVarP(&dashboardCliParam.ElasticsearchHosts, "es-hosts", "h", "", "Elasticsearch地址")
 	flag.StringVarP(&dashboardCliParam.ElasticsearchUsername, "es-username", "u", "", "Elasticsearch用户名")
 	flag.StringVarP(&dashboardCliParam.ElasticsearchPassword, "es-password", "p", "", "Elasticsearch密码")
 	flag.Parse()
@@ -48,19 +50,33 @@ func init() {
 	// 加载.env文件
 	err := godotenv.Load()
 	if err != nil {
-		fmt.Println("No .env file found")
+		log.Println("No .env file found")
 	}
-	driver := getEnvStr("DATABASE_DRIVER", dashboardCliParam.DatabaseDriver)
-	dsn := getEnvStr("DATABASE_DSN", dashboardCliParam.DatabaseDsn)
-	elasticsearchHosts := getEnvStr("ELASTICSEARCH_HOSTS", dashboardCliParam.ElasticsearchHosts)
-	elasticsearchUsername := getEnvStr("ELASTICSEARCH_USERNAME", dashboardCliParam.ElasticsearchUsername)
-	elasticsearchPassword := getEnvStr("ELASTICSEARCH_PASSWORD", dashboardCliParam.ElasticsearchPassword)
 
-	dashboardCliParam.DatabaseDriver = driver
-	dashboardCliParam.DatabaseDsn = dsn
-	dashboardCliParam.ElasticsearchHosts = elasticsearchHosts
-	dashboardCliParam.ElasticsearchUsername = elasticsearchUsername
-	dashboardCliParam.ElasticsearchPassword = elasticsearchPassword
+	// 优先使用命令行参数，如果为空则使用环境变量，最后使用默认值
+	if dashboardCliParam.DatabaseDriver == "" {
+		dashboardCliParam.DatabaseDriver = getEnvStr("DATABASE_DRIVER", "sqlite")
+	}
+
+	if dashboardCliParam.DatabaseDsn == "" {
+		dashboardCliParam.DatabaseDsn = getEnvStr("DATABASE_DSN", "data/sqlite.db")
+	}
+
+	if dashboardCliParam.ElasticsearchEnable == "" {
+		dashboardCliParam.ElasticsearchEnable = getEnvStr("ELASTICSEARCH_ENABLE", "false")
+	}
+
+	if dashboardCliParam.ElasticsearchHosts == "" {
+		dashboardCliParam.ElasticsearchHosts = getEnvStr("ELASTICSEARCH_HOSTS", "http://localhost:9200")
+	}
+
+	if dashboardCliParam.ElasticsearchUsername == "" {
+		dashboardCliParam.ElasticsearchUsername = getEnvStr("ELASTICSEARCH_USERNAME", "elastic")
+	}
+
+	if dashboardCliParam.ElasticsearchPassword == "" {
+		dashboardCliParam.ElasticsearchPassword = getEnvStr("ELASTICSEARCH_PASSWORD", "elastic")
+	}
 
 }
 
@@ -105,7 +121,7 @@ func main() {
 	singleton.InitConfigFromPath(dashboardCliParam.ConfigFile)
 	singleton.InitTimezoneAndCache()
 	singleton.InitDB(dashboardCliParam.DatabaseDriver, dashboardCliParam.DatabaseDsn)
-	singleton.InitES(dashboardCliParam.ElasticsearchHosts, dashboardCliParam.ElasticsearchUsername, dashboardCliParam.ElasticsearchPassword)
+	singleton.InitES(dashboardCliParam.ElasticsearchEnable, dashboardCliParam.ElasticsearchHosts, dashboardCliParam.ElasticsearchUsername, dashboardCliParam.ElasticsearchPassword)
 	singleton.InitLocalizer()
 	initSystem()
 

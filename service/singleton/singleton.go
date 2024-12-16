@@ -6,6 +6,7 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/patrickmn/go-cache"
@@ -91,21 +92,31 @@ func InitDB(driver string, dsn string) {
 }
 
 // InitES 初始化 ES
-func InitES(address, username, password string) {
+func InitES(enable, hosts, username, password string) {
 	log.Println("NEZHA>> 初始化 Elasticsearch 连接...")
+
 	var err error
+	isEnable, err := strconv.ParseBool(enable)
+	if err != nil {
+		log.Println(fmt.Sprintf("NEZHA>> 初始化 Elasticsearch 连接失败: %v", err))
+		panic("Elasticsearch 配置错误")
+	}
+	if !isEnable {
+		return
+	}
 
 	cfg := elasticsearch.Config{
-		Addresses: []string{address},
+		Addresses: []string{hosts},
 		Username:  username,
 		Password:  password,
 	}
-	log.Println(fmt.Sprintf("NEZHA>> Elasticsearch Host: %s", address))
+	log.Println(fmt.Sprintf("NEZHA>> Elasticsearch Host: %s", hosts))
 
 	// Create a new client
 	ES, err = elasticsearch.NewTypedClient(cfg)
 	if ES == nil || err != nil {
 		log.Println(fmt.Sprintf("NEZHA>> 初始化 Elasticsearch 连接失败: %v", err))
+		panic("初始化 Elasticsearch 连接失败")
 	}
 }
 
