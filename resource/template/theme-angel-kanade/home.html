@@ -154,6 +154,9 @@
         return str.includes('Windows')
       },
       getFontLogoClass(str) {
+        if (str == 'rocky') {
+          return 'rocky-linux';
+        }
         if (["almalinux",
           "alpine",
           "aosc",
