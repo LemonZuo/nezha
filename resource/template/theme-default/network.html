@@ -158,6 +158,9 @@
                 }
             },
             getFontLogoClass(str) {
+                if (str == 'rocky') {
+                    return 'rocky-linux';
+                }
                 if (["almalinux",
                         "alpine",
                         "aosc",
@@ -202,9 +205,6 @@
                         "zorin"].indexOf(str)
                     > -1) {
                     return str;
-                }
-                if (str == 'rocky') {
-                    return 'rocky-linux';
                 }
                 if (['openwrt', 'linux', "immortalwrt"].indexOf(str) > -1) {
                     return 'tux';
