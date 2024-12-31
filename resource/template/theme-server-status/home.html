@@ -329,7 +329,6 @@
                         "artix",
                         "budgie",
                         "centos",
-                        "rocky",
                         "coreos",
                         "debian",
                         "deepin",
@@ -368,6 +367,9 @@
                 }
                 if (str == 'darwin') {
                     return 'apple';
+                }
+                if (str == 'rocky') {
+                    return 'rocky-linux';
                 }
                 if (['openwrt', 'linux', "immortalwrt"].indexOf(str) > -1) {
                     return 'tux';
