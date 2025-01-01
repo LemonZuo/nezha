@@ -384,7 +384,6 @@
                     "pop-os",
                     "raspberry-pi",
                     "redhat",
-                    "rocky-linux",
                     "sabayon",
                     "slackware",
                     "snappy",
@@ -399,6 +398,10 @@
                 if (str == 'darwin') {
                     return 'apple';
                 }
+
+                if (['rocky','rocky-linux'].indexOf(str) > -1) {
+                    return 'rocky-linux';
+                }
                 if (['openwrt', 'linux'].indexOf(str) > -1) {
                     return 'tux';
                 }
@@ -410,9 +413,6 @@
                 }
                 if (str.toLowerCase().includes('opensuse')) {
                     return 'opensuse';
-                }
-                if (str == 'rocky') {
-                    return 'rocky-linux';
                 }
                 return '';
             },
