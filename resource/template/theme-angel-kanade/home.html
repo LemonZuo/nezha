@@ -163,7 +163,6 @@
           "artix",
           "budgie",
           "centos",
-          "rocky",
           "coreos",
           "debian",
           "deepin",
@@ -199,8 +198,8 @@
           > -1) {
             return str;
         }
-        if (["rocky", "rocky-linux"].indexOf(str) > -1) {
-          return "rocky-linux";
+        if (['rocky', 'rocky-linux'].indexOf(str) > -1) {
+          return 'rocky-linux';
         }
         if (['openwrt','linux'].indexOf(str) > -1) {
           return 'tux';
