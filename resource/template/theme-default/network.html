@@ -158,9 +158,6 @@
                 }
             },
             getFontLogoClass(str) {
-                if (str == 'rocky') {
-                    return 'rocky-linux';
-                }
                 if (["almalinux",
                         "alpine",
                         "aosc",
@@ -214,6 +211,9 @@
                 }
                 if (str == 'arch') {
                     return 'archlinux';
+                }
+                if (str == 'rocky') {
+                    return 'rocky-linux';
                 }
                 return '';
             },

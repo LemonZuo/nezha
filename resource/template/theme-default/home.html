@@ -350,9 +350,6 @@
                 return str.includes('Windows')
             },
             getFontLogoClass(str) {
-                if (str == 'rocky') {
-                    return 'rocky-linux';
-                }
                 if (["almalinux",
                     "alpine",
                     "aosc",
@@ -413,6 +410,9 @@
                 }
                 if (str.toLowerCase().includes('opensuse')) {
                     return 'opensuse';
+                }
+                if (str == 'rocky') {
+                    return 'rocky-linux';
                 }
                 return '';
             },
