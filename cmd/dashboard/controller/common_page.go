@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
 	"strconv"
 	"time"
 
@@ -197,6 +198,23 @@ func (cp *commonPage) network(c *gin.Context) {
 			}
 		}
 	}
+
+	// 根据Tag、sort、ID排序
+	sort.Slice(servers, func(i, j int) bool {
+		// 首先比较Tag
+		if servers[i].Tag != servers[j].Tag {
+			return servers[i].Tag < servers[j].Tag
+		}
+
+		// Tag相同时，比较DisplayIndex（sort）越大越靠前
+		if servers[i].DisplayIndex != servers[j].DisplayIndex {
+			return servers[i].DisplayIndex > servers[j].DisplayIndex
+		}
+
+		// DisplayIndex相同时，比较ID
+		return servers[i].ID < servers[j].ID
+	})
+
 	serversBytes, _ := utils.Json.Marshal(Data{
 		Now:     time.Now().Unix() * 1000,
 		Servers: servers,
