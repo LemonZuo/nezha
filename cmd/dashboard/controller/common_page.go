@@ -199,21 +199,8 @@ func (cp *commonPage) network(c *gin.Context) {
 		}
 	}
 
-	// 根据Tag、sort、ID排序
-	sort.Slice(servers, func(i, j int) bool {
-		// 首先比较Tag
-		if servers[i].Tag != servers[j].Tag {
-			return servers[i].Tag < servers[j].Tag
-		}
-
-		// Tag相同时，比较DisplayIndex（sort）越大越靠前
-		if servers[i].DisplayIndex != servers[j].DisplayIndex {
-			return servers[i].DisplayIndex > servers[j].DisplayIndex
-		}
-
-		// DisplayIndex相同时，比较ID
-		return servers[i].ID < servers[j].ID
-	})
+	// 排序
+	SortServers(servers)
 
 	serversBytes, _ := utils.Json.Marshal(Data{
 		Now:     time.Now().Unix() * 1000,
@@ -225,6 +212,67 @@ func (cp *commonPage) network(c *gin.Context) {
 		"MonitorInfos":    string(monitorInfos),
 		"MaxTCPPingValue": singleton.Conf.MaxTCPPingValue,
 	}))
+}
+
+// TagPriority 定义一个结构来存储Tag的优先级
+type TagPriority struct {
+	tag      string
+	priority int
+}
+
+// SortServers 对servers进行排序的函数
+func SortServers(servers []*model.Server) {
+	// 1. 获取所有Tag并确定优先级
+	tagPriorities := determineTagPriorities(servers)
+
+	// 2. 使用新的排序规则
+	sort.Slice(servers, func(i, j int) bool {
+		// 首先按Tag优先级排序
+		iPriority := tagPriorities[servers[i].Tag]
+		jPriority := tagPriorities[servers[j].Tag]
+		if iPriority != jPriority {
+			return iPriority < jPriority
+		}
+
+		// Tag优先级相同时，按DisplayIndex排序（越大越靠前）
+		if servers[i].DisplayIndex != servers[j].DisplayIndex {
+			return servers[i].DisplayIndex > servers[j].DisplayIndex
+		}
+
+		// DisplayIndex相同时，按ID排序
+		return servers[i].ID < servers[j].ID
+	})
+}
+
+// 确定Tag优先级的函数
+func determineTagPriorities(servers []*model.Server) map[string]int {
+	// 用于存储每个Tag第一次出现时对应的最小ID
+	tagFirstID := make(map[string]uint64)
+	// 用于存储最终的Tag优先级
+	tagPriorities := make(map[string]int)
+
+	// 1. 找出每个Tag第一次出现时对应的ID
+	for _, server := range servers {
+		if firstID, exists := tagFirstID[server.Tag]; !exists || server.ID < firstID {
+			tagFirstID[server.Tag] = server.ID
+		}
+	}
+
+	// 2. 将Tag按照首次出现的ID排序
+	var tags []TagPriority
+	for tag, firstID := range tagFirstID {
+		tags = append(tags, TagPriority{tag: tag, priority: int(firstID)})
+	}
+	sort.Slice(tags, func(i, j int) bool {
+		return tags[i].priority < tags[j].priority
+	})
+
+	// 3. 分配优先级
+	for i, tag := range tags {
+		tagPriorities[tag.tag] = i
+	}
+
+	return tagPriorities
 }
 
 func (cp *commonPage) getServerStat(c *gin.Context, withPublicNote bool) ([]byte, error) {
