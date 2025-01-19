@@ -312,6 +312,8 @@ func (m *MonitorAPIService) GetMonitorHistories(query map[string]any) *MonitorIn
 		return m.getMonitorHistoriesFromES(query)
 	} else {
 		// 否则从数据库获取
+		// 删除range字段，避免数据库查询时出错
+		delete(query, "range")
 		return m.getMonitorHistoriesFromDB(query)
 	}
 }
