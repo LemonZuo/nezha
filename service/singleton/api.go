@@ -301,9 +301,17 @@ func (s *ServerAPIService) Register(rs *RegisterServer) *ServerRegisterResponse 
 
 // GetMonitorHistories 获取监控历史
 func (m *MonitorAPIService) GetMonitorHistories(query map[string]any) *MonitorInfoResponse {
-	if ES != nil {
+	// 默认查询范围为1天
+	rangeValue, exists := query["range"].(int)
+	if !exists {
+		rangeValue = 1
+	}
+
+	if ES != nil && rangeValue > 1 {
+		// 如果开启了ES并且查询范围大于1天，则从ES获取
 		return m.getMonitorHistoriesFromES(query)
 	} else {
+		// 否则从数据库获取
 		return m.getMonitorHistoriesFromDB(query)
 	}
 }
@@ -610,6 +618,11 @@ func (m *MonitorAPIService) getMonitorHistoriesFromES(query map[string]any) *Mon
 	// 按照监控ID排序添加到结果中
 	for _, monitorID := range sortedMonitorIDs {
 		res.Result = append(res.Result, resultMap[monitorID])
+	}
+
+	// 如果结果为空，返回空数组
+	if len(res.Result) == 0 {
+		res.Result = make([]*MonitorInfo, 0)
 	}
 
 	return res
